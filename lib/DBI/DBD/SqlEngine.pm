@@ -1458,7 +1458,7 @@ sub open_table ($$$$$)
                 };
     $self->{command} eq "DROP" and $flags->{dropMode} = 1;
 
-    my ( $tblnm, $table_meta ) = $class->get_table_meta( $data->{Database}, $table, 1 )
+    my ( $tblnm, $table_meta ) = $class->find_table_meta( $data->{Database}, $table )
       or croak "Cannot find appropriate meta for table '$table'";
 
     defined $table_meta->{sql_table_class} and $class = $table_meta->{sql_table_class};
@@ -1491,6 +1491,21 @@ use Carp;
 
 @DBI::DBD::SqlEngine::Table::ISA = qw(DBI::SQL::Nano::Table);
 
+if (eval { require Params::Util; }) {
+    Params::Util->import ("_HASHLIKE");
+    }
+else {
+    use  Scalar::Util ();
+    use overload ();
+    *_HASHLIKE = sub {
+        (defined $_[0] and ref $_[0] and (
+                (Scalar::Util::reftype($_[0]) eq 'HASH')
+                or
+                overload::Method($_[0], '%{}')
+        )) ? $_[0] : undef;
+    };
+}
+
 sub bootstrap_table_meta
 {
     my ( $self, $dbh, $meta, $table ) = @_;
@@ -1515,7 +1530,20 @@ sub init_table_meta
 
 sub get_table_meta ($$$;$)
 {
-    my ( $self, $dbh, $table, $respect_case, @other ) = @_;
+    my ( $self, $dbh, $table, $respect_case, @extra ) = @_;
+    $self->find_table_meta( $dbh, $table, { respect_case => $respect_case, extra => \@extra } );
+}    # get_table_meta
+
+sub find_table_meta
+{
+    my ($self, $dbh, $table, $options) = @_;
+    defined $options or $options = {};
+    # XXX - import _HASHLIKE
+    _HASHLIKE($options) or croak('find_table_meta($dbh, $table, $respect_case, \%options)');
+
+    my $respect_case = $options->{respect_case};
+    my @extra = @{$options->{extra} || []};
+
     unless ( defined $respect_case )
     {
         $respect_case = 0;
@@ -1534,8 +1562,8 @@ sub get_table_meta ($$$;$)
   do_initialize:
     unless ( $meta->{initialized} )
     {
-        $self->bootstrap_table_meta( $dbh, $meta, $table, @other );
-        $meta->{sql_data_source}->complete_table_name( $meta, $table, $respect_case, @other )
+        $self->bootstrap_table_meta( $dbh, $meta, $table, @extra );
+        $meta->{sql_data_source}->complete_table_name( $meta, $table, $respect_case, @extra )
           or return;
 
         if ( defined $meta->{table_name} and $table ne $meta->{table_name} )
@@ -1551,7 +1579,7 @@ sub get_table_meta ($$$;$)
             $meta = delete $dbh->{sql_meta}{$table};    # avoid endless loop
             $meta->{initialized}
               or goto do_initialize;
-            #or $meta->{sql_data_source}->complete_table_name( $meta, $table, $respect_case, @other )
+            #or $meta->{sql_data_source}->complete_table_name( $meta, $table, $respect_case, @extra )
             #or return;
         }
 
@@ -1564,7 +1592,7 @@ sub get_table_meta ($$$;$)
     }
 
     return ( $table, $meta );
-}    # get_table_meta
+}
 
 my %reset_on_modify = ();
 my %compat_map      = ();

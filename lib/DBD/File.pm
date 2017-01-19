@@ -787,6 +787,7 @@ require Scalar::Util;
 
 if (eval { require Params::Util; }) {
     Params::Util->import ("_HANDLE");
+    Params::Util->import ("_HASHLIKE");
     }
 else {
     # taken but modified from Params::Util ...
@@ -821,6 +822,7 @@ else {
 	# This is not any sort of object we know about
 	return;
 	};
+        *_HASHLIKE = &DBI::DBD::SqlEngine::Table::_HASHLIKE;
     }
 
 # ====== FLYWEIGHT SUPPORT =====================================================
@@ -863,12 +865,24 @@ sub get_table_meta ($$$$;$)
 {
     my ($self, $dbh, $table, $file_is_table, $respect_case) = @_;
 
-    my $meta = $self->SUPER::get_table_meta ($dbh, $table, $respect_case, $file_is_table);
-    $table = $meta->{table_name};
-    return unless $table;
-
-    return ($table, $meta);
+    $self->find_table_meta( $dbh, $table, { respect_case => $respect_case, file_is_table => $file_is_table } );
     } # get_table_meta
+
+sub find_table_meta
+{
+    my ($self, $dbh, $table, $options) = @_;
+
+    defined $options or $options = {};
+    _HASHLIKE($options) or Carp::croak('find_table_meta($dbh, $table, $respect_case, \%options)');
+
+    my $file_is_table = $options->{file_is_table};
+    my @extra = @{$options->{extra} || []};
+
+    defined $file_is_table or $file_is_table = 1;
+    unshift @extra, $file_is_table;
+
+    $self->SUPER::find_table_meta( $dbh, $table, { %$options, extra => \@extra } );
+    } # find_table_meta
 
 my %reset_on_modify = (
     f_file       => [ "f_fqfn", "sql_data_source" ],
