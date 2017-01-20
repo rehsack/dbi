@@ -5,6 +5,7 @@ use strict;
 use warnings;
 
 require DBD::DBM;
+require DBD::Mem;
 
 use File::Path;
 use File::Spec;
@@ -34,17 +35,17 @@ ok( $dbm_dbh->do(q/create table FRED (a integer, b integer)/), q/create table FR
 ok( $dbm_dbh->do(q/insert into fRED (a,b) values(1,2)/), q/insert into fRED (a,b) values(1,2)/);
 ok( $dbm_dbh->do(q/insert into FRED (a,b) values(2,1)/), q/insert into FRED (a,b) values(2,1)/);
 
-my $f_dbh = DBI->connect( 'dbi:File:', undef, undef, {
-      f_dir               => $dir,
+my $mem_dbh = DBI->connect( 'dbi:Mem:', undef, undef, {
       sql_identifier_case => 2,      # SQL_IC_LOWER
     }
 );
 
-ok( my $dbm_fred_meta = $dbm_dbh->f_get_meta("fred", [qw(dbm_type)]), q/$dbm_dbh->f_get_meta/);
-note("Switching from \$dbm_dbh to \$f_dbh");
-ok( $f_dbh->f_new_meta( "fred", {sql_table_class => "DBD::DBM::Table"} ), q/$f_dbh->f_new_meta/);
+ok( my $dbm_fred_meta = $dbm_dbh->dbm_get_meta("fred", [qw(dbm_type)]), q/$dbm_dbh->f_get_meta/);
+note("Switching from \$dbm_dbh to \$_mem");
+ok( $mem_dbh->mem_new_meta( "fred", {sql_table_class => "DBD::DBM::Table"} ), q/$mem_dbh->f_new_meta/);
 
-my $r = $f_dbh->selectall_arrayref(q/select * from Fred/);
+my $r = $mem_dbh->selectall_arrayref(q/select * from fred/);
 ok( @$r == 2, 'rows found via mixed case table' );
 
 done_testing();
+
